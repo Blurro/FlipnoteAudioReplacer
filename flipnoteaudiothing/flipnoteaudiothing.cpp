@@ -46,7 +46,7 @@ std::string NameGen(std::ifstream& file) {
     return std::format("{}{}_{}_{}", randomLetter, str1, str2, str3);
 }
 
-int main(int argc, char** argv) {
+int main(int argc, char* argv[]) {
     std::vector<char> bgm;
 
     std::cout << "Hello!!" << std::endl;
@@ -57,21 +57,13 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    // Get the file path from the argument
     std::string filePath = argv[1];
 
-    // Try opening the file
-    std::ifstream filel(filePath);
-    if (!filel) {
-        std::cout << "Error: Unable to open file '" << filePath << "'." << std::endl;
-        return 1;
-    }
-
     std::string path_string = std::filesystem::current_path().string();
-    std::replace(path_string.begin(), path_string.end(), '\\', '/');
     std::cout << path_string << std::endl;
+    std::cout << filePath << std::endl;
 
-    system(std::format("ffmpeg -i {} -ac 1 -y -ar 8192 audio.wav", filePath).c_str());
+    system(std::format("ffmpeg -i \"{}\" -ac 1 -y -ar 8192 audio.wav", filePath).c_str());
 
     std::cout << "Loading BGM..." << std::endl;
     std::string bgm_path = "audio.wav";
