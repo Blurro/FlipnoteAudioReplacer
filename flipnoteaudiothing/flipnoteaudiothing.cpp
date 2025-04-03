@@ -146,7 +146,6 @@ int main(int argc, char* argv[]) {
     outyFile.write(firstPart.data(), firstPart.size());
 
     outyFile.close();
-    outyFile.open(filePathOutput, std::ios::binary | std::ios::trunc); // close n reopen so writing again doesnt append
 
     // totally doesnt just grab the actual rsa key dont be silly
     system("echo -----BEGIN RSA PRIVATE KEY----- > temp.e");
@@ -163,6 +162,8 @@ int main(int argc, char* argv[]) {
     sha1Data.resize(sha1Data.size() + 16, '\0');
 
     firstPart.insert(firstPart.end(), sha1Data.begin(), sha1Data.end());
+
+    outyFile.open(filePathOutput, std::ios::binary | std::ios::trunc); // close n reopen so writing again doesnt append. Opening wipes file.
     outyFile.write(firstPart.data(), firstPart.size());
     remove("sha1.sign");
     
