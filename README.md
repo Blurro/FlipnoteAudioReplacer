@@ -2,6 +2,8 @@
 Tool that requires just your .wav audio file and your original flipnote, it replaces the audio and a new .ppm is ready for your DS.
 I'm just a huge noob who got really dead set on getting HQ audio into my flipnote and I got myself real deep in this rabbit hole, hope it helps someone else.
 
+**It is against Sudomemo rules to modify flipnotes outside of the app**, buut you might get away with it buuut you might be banned, just a heads up o_o
+
 ## Credits
 
 - **Thanks to [@Khang06](https://github.com/khang06)** for their audio conversion code (which I take ZERO credit for), I have no idea how it differs from simple ffmpeg and sox commands I just know that only this works.
