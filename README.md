@@ -14,3 +14,4 @@ I'm just a huge noob who got really dead set on getting HQ audio into my flipnot
 
 Open CMD in the same folder as the tool and just do 'flipaud input.wav' or drag and drop the .wav onto the tool (not the open window, the exe in file explorer!)
 Enter your flipnote.ppm file name when prompted (.ppm inclduded), the tool will automatically rename the output flipnote to a name your DS will accept.
+Full guide with useful info around animation speeds, and how it can help you **double the quality of your song** [found here on GBATemp](https://gbatemp.net/threads/flipnote-nds-ppm-file-direct-audio-import-tool.669125/)
