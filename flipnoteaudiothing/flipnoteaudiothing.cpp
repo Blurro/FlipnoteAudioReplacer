@@ -30,7 +30,7 @@ std::string NameGen(std::ifstream& file) {
     std::mt19937 gen(rd());
     std::uniform_int_distribution<int> dist(0, 35);
     std::string randomLetter(1, "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ"[dist(gen)]);
-    std::cout << std::format("Your random lucky first character is '{}' (ONLY THIS ONE can be anything)", randomLetter) << std::endl;
+    std::cout << std::format("Your random lucky first character is '{}' (unsure of exact formula rn but rename to OG if you want correct)", randomLetter) << std::endl;
 
     std::string str2(13, '\0');
     file.seekg(0x7B);
@@ -46,8 +46,46 @@ std::string NameGen(std::ifstream& file) {
     return std::format("{}{}_{}_{}", randomLetter, str1, str2, str3);
 }
 
+static bool isNumber(const std::string& str) {
+    // Helper function to check if a string is a valid integer
+    for (char c : str) {
+        if (!isdigit(c)) return false;
+    }
+    return true;
+}
+
+static void moveCursor(int row, int col) {
+    // ANSI escape sequence to move cursor to a specific row and column (with colour blue)
+    std::cout << "\u001b[34m\033[" << row << ";" << col << "H";
+}
+
 int main(int argc, char* argv[]) {
     std::vector<char> bgm;
+
+    const std::string logo[] = {
+    "               ..::~:~:~.: . .               ",
+    "           .^YY#5#J#55YJY7Y77!~!::.          ",
+    "        .~PG5~7?#?B7B~B^G:5:5.Y:! ^.~        ",
+    "       ?B#&G#G?~::57G!5!Y~J~?.! :.:^.:..     ",
+    "     !G&#&?. .~G?P.^:7Y!J^? :.~.~..  .....   ",
+    "   .G&&#&B      .~5^?:Y^P.!.~.^       . :    ",
+    "  :&&@B&GB          : 7:Y.            .. .   ",
+    " .&&@#&B&GJ           :~7.            : . .  ",
+    " B&@#&G&G#P5~.      .!!!!:~        ..: : .   ",
+    ".@#@B&57 . ^:7~Y~?!??~J:Y.!^:! . :.        . ",
+    "!&###B.         .:.:^~^:^.~.                 ",
+    "7&###P                                       ",
+    "^&B&PB                                       ",
+    " BG@J&~                                      ",
+    " :#P&P#                                      ",
+    "  !BP#5Y                                     ",
+    "   ^PYGY~                                    ",
+    "    .??PP~                                   ",
+    "      :?YYJ.                                 ",
+    "        .~7?Y7..                  .          ",
+    "           .^~^?:! .                         ",
+    "               . : : : . .                   "
+    };
 
     std::cout << "Hello!!" << std::endl;
 
@@ -78,6 +116,11 @@ int main(int argc, char* argv[]) {
         throw "WAV file needs to be mono!";
     if (pcm_frame_count > UINT32_MAX)
         throw "BGM is too big!";
+
+    // Apply fade in to the beginning (1.0f = 1s = 8192 samples)
+    //ApplyFadeIn(sample_data, pcm_frame_count, 0.2f, sample_rate);
+    // commented out because it does not work as desired right now
+
     for (uint64_t i = 0; i < pcm_frame_count; i += 2) {
         bgm.push_back(encoder.EncodeSample(sample_data[i]) | encoder.EncodeSample(sample_data[i + 1]) << 4);
     }
@@ -88,12 +131,56 @@ int main(int argc, char* argv[]) {
     std::cout << "File saved as output.adpcm" << std::endl;
 
     std::ifstream file;
+    std::cout << "\n\nEnter flipnote.ppm to insert music to below\nOptional: Add 'import speed' and 'target speed' values! Example:\n'flip.ppm 5 6' (the song speed AND Hz quality will be doubled to suit the 6->12 fps jump)\nMake sure to adjust the song speed manually in Audacity for this. Adjustment guide: https://gbatemp.net/threads/flipnote-nds-ppm-file-direct-audio-import-tool.669125/\n\nYour input: ";
+
+    // FIRE LOGO PRINT
+    for (int i = 0; i < 22; i++) {
+        // Count the leading spaces
+        int leadingSpaces = 0;
+        while (leadingSpaces < logo[i].size() && logo[i][leadingSpaces] == ' ') {
+            leadingSpaces++;
+        }
+
+        // Remove the leading spaces from the line
+        std::string lineWithoutSpaces = logo[i].substr(leadingSpaces);
+
+        moveCursor(2 + i, 70 + leadingSpaces);
+        std::cout << lineWithoutSpaces;
+    }
+    std::cout << "\u001b[37m\033[999;13H";
+    //end of fire logo print
+
+    std::string fileargs;
+    std::getline(std::cin, fileargs);  // Read the entire line of input
+
+    // To split the file args into components
+    std::istringstream ss(fileargs);
+
     std::string filename;
-    std::cout << "\n\nEnter flipnote.ppm to insert music to: ";
-    std::cin >> filename;
+    ss >> std::quoted(filename);
+    int importval = 0, targetval = 0;
+    if (!(ss >> importval) || importval < 1 || importval > 8) {
+        importval = 0;  // If extraction fails or value is out of range, set to 0
+    } else if (!(ss >> targetval) || targetval < 1 || targetval > 8) {
+        targetval = 0;
+        importval = 0;
+    }
+    if (targetval < importval) {
+        std::cout << "Target speed cannot be smaller than import speed (well it can but thats stupid). Keeping default values.\n";
+        targetval = 0;
+        importval = 0;
+    }
+
+    std::cout << filename << std::endl;
+    if (importval != 0) {
+        std::cout << "Import value: " << importval << std::endl;
+        std::cout << "Target value: " << targetval << std::endl;
+    }
+
     file.open(filename, std::ios::binary);
     if (!file) {
         std::cerr << "Couldn't find file :(" << std::endl;
+        system("pause");
         return 1;
     }
 
@@ -125,8 +212,14 @@ int main(int argc, char* argv[]) {
 
     *reinterpret_cast<uint32_t*>(&fileData[bgmSizeOffset]) = bgm.size(); // updates bgm size data
 
-    int dataSizeStart = bgmSizeOffset + 32; // Start of the chunk to modify
-    int dataSizeEnd = dataSizeStart + bgmLength; // End of the chunk to modify
+    if (targetval > 0) {
+        *reinterpret_cast<uint8_t*>(&fileData[bgmSizeOffset + 16]) = 8 - targetval;
+        *reinterpret_cast<uint8_t*>(&fileData[bgmSizeOffset + 17]) = 8 - importval;
+        std::cout << std::format("Updated import/target speed flags\n");
+    }
+
+    int dataSizeStart = bgmSizeOffset + 32; // Start of the chunk to drop
+    int dataSizeEnd = dataSizeStart + bgmLength; // End of the chunk to drop
 
     // Extract the parts we want to keep
     std::vector<char> firstPart(fileData.begin(), fileData.begin() + dataSizeStart);
@@ -135,7 +228,7 @@ int main(int argc, char* argv[]) {
 
     std::vector<char> newData(bgm.begin(), bgm.end());
 
-    // Concatenate the data
+    // Concatenate firstpart with newdata (music), then secondpart (everything after music except sig, so just sfx if any)
     firstPart.insert(firstPart.end(), newData.begin(), newData.end());
     firstPart.insert(firstPart.end(), secondPart.begin(), secondPart.end() - 0x90);
 

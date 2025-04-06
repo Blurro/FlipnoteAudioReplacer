@@ -1,2 +1,21 @@
+# Build folders
+x64/
+Debug/
+Release/
+*.log
+*.obj
+*.pch
+*.tlog
+*.idb
+*.pdb
+*.ipch
 
+# Visual Studio generated files
+*.vcxproj.user
+*.vcxproj.filters
+*.suo
+*.VC.db
+*.VC.opendb
+*.cache
+*.ilk
 /.vs
