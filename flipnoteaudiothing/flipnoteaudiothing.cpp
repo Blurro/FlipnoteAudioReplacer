@@ -257,7 +257,11 @@ int main(int argc, char* argv[]) {
     else {
         int result = system("ffmpeg -version >nul 2>&1");
         if (result != 0) {  // Check if ffmpeg is available in the system PATH
-            std::cerr << "FFmpeg is not installed (not found on PATH) AND no FFmpeg.exe next to tool" << std::endl;
+            std::cout << "FFmpeg is not installed (not found on PATH) AND no FFmpeg.exe next to tool\nDownloading ffmpeg.exe (to tool directory)..." << std::endl;
+            std::string ffmpegDownloadCmd = "curl -L -o \"" + ffmpegPath + "\" https://github.com/Blurro/FlipnoteAudioReplacer/raw/refs/heads/main/ffmpeg.exe";
+            system(ffmpegDownloadCmd.c_str());
+            std::cout << "Done, try tool again." << std::endl;
+            system("pause");
             return 1;
         }
         else {
