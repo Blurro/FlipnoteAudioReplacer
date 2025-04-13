@@ -10,6 +10,8 @@ I'm just a huge noob who got really dead set on getting HQ audio into my flipnot
   
 - **Thanks to [JoshuaDoes](https://github.com/JoshuaDoes)** for their Go code, which was very helpful for programmatically finding the sounds offset.
 
+- **Thanks to [James](https://github.com/jaames)** for providing useful info about Flipnote audio, including the app's own decompiled functions for encoding and decoding which carry this tool
+
 ## Usage
 
 *Encoding+importing* Just drag and drop your .wav file (under 1 min, mp4 works too) onto the tool, and enter your flipnote file when asked!
