@@ -6,7 +6,7 @@ I'm just a huge noob who got really dead set on getting HQ audio into my flipnot
 
 ## Credits
 
-- **Thanks to [@Khang06](https://github.com/khang06)** for their audio conversion code (which I take ZERO credit for), I have no idea how it differs from simple ffmpeg and sox commands I just know that only this works.
+- **Thanks to [Khang06](https://github.com/khang06)** for their audio conversion code (which I take ZERO credit for), I have no idea how it differs from simple ffmpeg and sox commands I just know that only this works.
   
 - **Thanks to [JoshuaDoes](https://github.com/JoshuaDoes)** for their Go code, which was very helpful for programmatically finding the sounds offset.
 
