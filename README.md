@@ -12,7 +12,9 @@ I'm just a huge noob who got really dead set on getting HQ audio into my flipnot
 
 ## Usage
 
-Open CMD in the same folder as the tool and just do 'flipaud input.wav' or drag and drop the .wav onto the tool (not the open window, the exe in file explorer!)
+Just drag and drop your <1min .wav file (mp4 works too) onto the tool, and enter your flipnote file when asked!
+
+Requires ffmpeg to be installed and added to your system path! (remind me to do something about that)
 
 Enter your flipnote.ppm file name when prompted (.ppm inclduded), the tool will automatically rename the output flipnote to a name your DS will accept.
 
