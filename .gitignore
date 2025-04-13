@@ -2,6 +2,7 @@
 x64/
 Debug/
 Release/
+flipnoteaudiothing/x64/
 *.log
 *.obj
 *.pch
@@ -18,4 +19,4 @@ Release/
 *.VC.opendb
 *.cache
 *.ilk
-/.vs
+.vs/

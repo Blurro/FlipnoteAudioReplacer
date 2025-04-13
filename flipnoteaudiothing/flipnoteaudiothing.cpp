@@ -12,13 +12,16 @@
 #include <codecvt>
 #include <random>
 #include "adpcm_encoder.cpp"
+#include <cstdlib>
+#include <string>
+#include <windows.h>
 #define DR_WAV_IMPLEMENTATION
 #include "../include/dr_wav.h"
 
-std::string NameGen(std::ifstream& file) {
+std::string NameGen(std::unique_ptr<std::istream>& file) {
     char str1e[3];
-    file.seekg(0x78);
-    file.read(str1e, 3);
+    file->seekg(0x78);
+    file->read(str1e, 3);
     std::stringstream hexStream;
     for (int i = 0; i < 3; i++) {
         hexStream << std::setw(2) << std::setfill('0') << std::hex << std::uppercase << (0xFF & (unsigned int)str1e[i]);
@@ -33,12 +36,12 @@ std::string NameGen(std::ifstream& file) {
     std::cout << std::format("Your random lucky first character is '{}' (unsure of exact formula rn but rename to OG if you want correct)", randomLetter) << std::endl;
 
     std::string str2(13, '\0');
-    file.seekg(0x7B);
-    file.read(&str2[0], 13);
+    file->seekg(0x7B);
+    file->read(&str2[0], 13);
 
     uint16_t str3e;
-    file.seekg(0x88);
-    file.read(reinterpret_cast<char*>(&str3e), sizeof(str3e));
+    file->seekg(0x88);
+    file->read(reinterpret_cast<char*>(&str3e), sizeof(str3e));
     std::ostringstream ss;
     ss << std::setw(3) << std::setfill('0') << str3e;
     std::string str3 = ss.str();
@@ -54,14 +57,66 @@ static bool isNumber(const std::string& str) {
     return true;
 }
 
-static void moveCursor(int row, int col) {
-    // ANSI escape sequence to move cursor to a specific row and column (with colour blue)
-    std::cout << "\u001b[34m\033[" << row << ";" << col << "H";
+uint16_t frameCount;
+int calculateBgmSizeOffset(std::unique_ptr<std::istream>& file) {
+    uint32_t animSize;
+    file->seekg(0x4, std::ios::beg);
+    file->read(reinterpret_cast<char*>(&animSize), sizeof(animSize));
+    std::cout << "Anim length: " << animSize << std::endl;
+
+    file->seekg(0xC, std::ios::beg);
+    file->read(reinterpret_cast<char*>(&frameCount), sizeof(frameCount));
+    frameCount += 1;
+    std::cout << "Frame count: " << frameCount << std::endl;
+
+    int calculatedOffset = 1696 + animSize + frameCount;
+    int remainder = calculatedOffset % 4;
+    int bgmSizeOffset = (remainder == 0) ? calculatedOffset : calculatedOffset + (4 - remainder);
+
+    return bgmSizeOffset;
 }
 
-int main(int argc, char* argv[]) {
-    std::vector<char> bgm;
+std::istringstream ss;
+std::string fileExtension;
+std::unique_ptr<std::istream> openFileFromInput() {
+    std::string fileargs;
+    std::getline(std::cin, fileargs);
 
+    // Replace backslashes with forward slashes before quoted() removes them
+    for (char& c : fileargs) {
+        if (c == '\\') c = '/';
+    }
+    ss.str(fileargs);
+
+    std::string filename;
+    ss >> std::quoted(filename);
+
+    size_t dotPos = filename.rfind('.');
+    if (dotPos != std::string::npos) {
+        fileExtension = filename.substr(dotPos);
+    }
+
+    auto file = std::make_unique<std::ifstream>(filename, std::ios::binary);
+
+    if (!file) {
+        std::cerr << "Couldn't find file :(" << std::endl;
+        system("pause");
+        file->setstate(std::ios::failbit);
+        return file;
+    }
+    return file;  // Return the open file stream
+}
+
+std::string getExeDirectory() {
+    char exePath[MAX_PATH];
+    if (GetModuleFileNameA(NULL, exePath, MAX_PATH)) {
+        std::filesystem::path exeFilePath(exePath);
+        return exeFilePath.parent_path().string(); // Return the directory part
+    }
+    return "";  // Return an empty string if something went wrong
+}
+
+void FireLogoPrint(int x, int y, int endx, int endy) {
     const std::string logo[] = {
     "               ..::~:~:~.: . .               ",
     "           .^YY#5#J#55YJY7Y77!~!::.          ",
@@ -86,78 +141,196 @@ int main(int argc, char* argv[]) {
     "           .^~^?:! .                         ",
     "               . : : : . .                   "
     };
+    for (int i = 0; i < 22; i++) {
+        int leadingSpaces = 0;
+        while (leadingSpaces < logo[i].size() && logo[i][leadingSpaces] == ' ') {
+            leadingSpaces++;
+        }
+        std::string lineWithoutSpaces = logo[i].substr(leadingSpaces);
+        std::cout << "\u001b[34m\033[" << y + i << ";" << x + leadingSpaces << "H";
+        std::cout << lineWithoutSpaces;
+    }
+    std::cout << std::format("\u001b[37m\033[{};{}H", endy, endx); // did it differently to just a few lines ago cus consistency whooo pshhh
+}
+
+constexpr double getFpsFromSpeed(int speed) {
+    switch (speed) {
+    case 1: return 0.5;
+    case 2: return 1;
+    case 3: return 2;
+    case 4: return 4;
+    case 5: return 6;
+    case 6: return 12;
+    case 7: return 20;
+    case 8: return 30;
+    default: return 0;
+    }
+}
+
+int main(int argc, char* argv[]) {
+    std::vector<char> bgm;
 
     std::cout << "Hello!!" << std::endl;
 
-    if (argc < 2) {
-        std::cout << "Usage: Drag and drop a .wav file onto the tool, or provide its path as an argument" << std::endl;
-        system("pause");
+    std::string exeDirectory = getExeDirectory();
+    if (exeDirectory.empty()) {
+        std::cerr << "Failed to determine the executable directory." << std::endl;
         return 1;
     }
 
-    std::string filePath = argv[1];
+    if (argc < 2) {
+        std::string promppy = "OR enter a flip.ppm/.adpcm to extract a .wav from: ";
+        std::cout << "Usage for import: Drag and drop a .wav file onto the tool, or provide its path as an argument\n\n" << promppy;
 
-    std::string path_string = std::filesystem::current_path().string();
-    std::cout << path_string << std::endl;
+        FireLogoPrint(56, 5, promppy.length()+1, 4);
+
+        std::unique_ptr<std::istream> inputFile = openFileFromInput();
+        if (!inputFile) { return 1; }
+
+        if (fileExtension == ".ppm") {
+            int bgmSizeOffset = calculateBgmSizeOffset(inputFile);
+            std::cout << std::format("BGM offset at: {} ({:#x})\n", bgmSizeOffset, bgmSizeOffset);
+
+            uint32_t bgmLength;
+            inputFile->seekg(bgmSizeOffset, std::ios::beg);
+            inputFile->read(reinterpret_cast<char*>(&bgmLength), sizeof(bgmLength));
+            std::cout << std::format("BGM length is: {}\n", bgmLength);
+
+            inputFile->seekg(bgmSizeOffset + 32, std::ios::beg);
+            std::vector<char> adpcmData(bgmLength); // makes vector with size 'bgmlength'
+            inputFile->read(adpcmData.data(), bgmLength); // reads from current seek (chosen above) until vector is full
+            inputFile = std::make_unique<std::istringstream>(std::string(adpcmData.begin(), adpcmData.end())); // sets inputfile to the adpcm data
+        }
+        else if (fileExtension != ".adpcm") {
+            std::cerr << "Can't decode audio from this type (enter a ppm or adpcm file)" << std::endl;
+            system("pause");
+            return 0;
+        }
+
+        uint16_t initialPredict;
+        uint8_t initialStep;
+        inputFile->read(reinterpret_cast<char*>(&initialPredict), sizeof(initialPredict));
+        inputFile->seekg(2, std::ios::beg);
+        inputFile->read(reinterpret_cast<char*>(&initialStep), sizeof(initialStep));
+
+        std::cout << "Initial predictor: " << initialPredict << "\n";
+        std::cout << "Initial step index: " << static_cast<int>(initialStep) << "\n";
+
+        inputFile->seekg(4, std::ios::beg); // skip first 4 bytes
+        std::vector<char> inputData((std::istreambuf_iterator<char>(*inputFile)), std::istreambuf_iterator<char>());
+
+        // Prepare output buffer for decoded samples
+        std::vector<char> outputData(inputData.size() * 4);
+
+        AdpcmDecoder decoder;
+
+        // Decode the ADPCM data into outputData
+        int numSamples = inputData.size() * 2;
+        decoder.DecodeSamples(inputData.data(), outputData.data(), numSamples, initialPredict, initialStep);
+
+        // Open the WAV file for writing
+        std::ofstream outputFile("decoded.wav", std::ios::binary);
+        if (!outputFile) {
+            std::cerr << "Failed to save decoded.wav." << std::endl;
+            return 1;
+        }
+
+        // Write the WAV header
+        writeWavHeader(outputFile, outputData.size());
+
+        // Write the decoded audio samples (16-bit PCM data)
+        outputFile.write(outputData.data(), outputData.size());
+        outputFile.close();
+
+        std::cout << "Decoding complete. Output saved to 'decoded.wav'." << std::endl;
+
+        system("pause");
+        return 0;
+    }
+
+    int ffmpegFound = 3;
+    std::string ffmpegPath = exeDirectory + "\\ffmpeg.exe";
+    if (std::filesystem::exists(ffmpegPath)) {
+        ffmpegFound = 1;
+        std::cout << "FFmpeg found in executable directory." << std::endl;
+    }
+    else {
+        int result = system("ffmpeg -version >nul 2>&1");
+        if (result != 0) {  // Check if ffmpeg is available in the system PATH
+            std::cerr << "FFmpeg is not installed (not found on PATH) AND no FFmpeg.exe next to tool" << std::endl;
+            return 1;
+        }
+        else {
+            ffmpegFound = 2;
+            std::cout << "FFmpeg found in system PATH." << std::endl;
+        }
+    }
+
+    std::string filePath = argv[1];
+    //std::string filePath = "ogextract.wav";
     std::cout << filePath << std::endl;
 
-    system(std::format("ffmpeg -i \"{}\" -ac 1 -y -ar 8192 audio.wav", filePath).c_str());
+    if (ffmpegFound == 1) {
+        system(std::format("{} -i \"{}\" -ac 1 -y -ar 8192 audio.wav", ffmpegPath, filePath).c_str());
+    }
+    else if (ffmpegFound == 2) {
+        system(std::format("ffmpeg -i \"{}\" -ac 1 -y -ar 8192 audio.wav", filePath).c_str());
+    }
+    else {
+        return 1;
+    }
 
     std::cout << "Loading BGM..." << std::endl;
     std::string bgm_path = "audio.wav";
     unsigned int channels;
-    unsigned int sample_rate; // won't actually be used, but there's not much i can do about that
+    unsigned int sample_rate;
     uint64_t pcm_frame_count;
     int16_t* sample_data = drwav_open_file_and_read_pcm_frames_s16(bgm_path.c_str(), &channels, &sample_rate, &pcm_frame_count);
+
+    if (!sample_data) throw "Could not parse audio.wav!";
+    if (channels != 1) throw "WAV file needs to be mono!";
+    if (pcm_frame_count > 491520) {
+        std::cout << "BGM is longer than 1 minute!" << std::endl;
+        system("pause");
+        return 1;
+    }
+
+    AdpcmState initialState = EncodeInitialState(sample_data[0]);
+    std::cout << "Best initial step index: " << static_cast<int>(initialState.stepIndex) << std::endl;
+
     AdpcmEncoder encoder;
-    if (!sample_data)
-        throw "Could not parse audio.wav!";
-    if (channels != 1)
-        throw "WAV file needs to be mono!";
-    if (pcm_frame_count > UINT32_MAX)
-        throw "BGM is too big!";
-
-    // Apply fade in to the beginning (1.0f = 1s = 8192 samples)
-    //ApplyFadeIn(sample_data, pcm_frame_count, 0.2f, sample_rate);
-    // commented out because it does not work as desired right now
-
+    encoder.step_index = initialState.stepIndex;
     for (uint64_t i = 0; i < pcm_frame_count; i += 2) {
         bgm.push_back(encoder.EncodeSample(sample_data[i]) | encoder.EncodeSample(sample_data[i + 1]) << 4);
     }
+    // add adpcm header
+    std::vector<char> header = {
+    0x00,
+    0x00,
+    static_cast<char>(initialState.stepIndex),
+    0x00 };
+    bgm.insert(bgm.begin(), header.begin(), header.end());
+
+    double seconds = pcm_frame_count / 8192.0;
+    seconds = std::round(seconds * 1000.0) / 1000.0;
+    std::cout << std::format("Imported song length: {}s\n", seconds);
 
     std::ofstream outFile("output.adpcm", std::ios::binary);
     outFile.write(reinterpret_cast<const char*>(bgm.data()), bgm.size());
     outFile.close();
     std::cout << "File saved as output.adpcm" << std::endl;
 
-    std::ifstream file;
     std::cout << "\n\nEnter flipnote.ppm to insert music to below\nOptional: Add 'import speed' and 'target speed' values! Example:\n'flip.ppm 5 6' (the song speed AND Hz quality will be doubled to suit the 6->12 fps jump)\nMake sure to adjust the song speed manually in Audacity for this. Adjustment guide: https://gbatemp.net/threads/flipnote-nds-ppm-file-direct-audio-import-tool.669125/\n\nYour input: ";
 
     // FIRE LOGO PRINT
-    for (int i = 0; i < 22; i++) {
-        // Count the leading spaces
-        int leadingSpaces = 0;
-        while (leadingSpaces < logo[i].size() && logo[i][leadingSpaces] == ' ') {
-            leadingSpaces++;
-        }
-
-        // Remove the leading spaces from the line
-        std::string lineWithoutSpaces = logo[i].substr(leadingSpaces);
-
-        moveCursor(2 + i, 70 + leadingSpaces);
-        std::cout << lineWithoutSpaces;
-    }
-    std::cout << "\u001b[37m\033[999;13H";
+    FireLogoPrint(70, 2, 13, 999);
     //end of fire logo print
 
-    std::string fileargs;
-    std::getline(std::cin, fileargs);  // Read the entire line of input
+    std::unique_ptr<std::istream> file = openFileFromInput();
+    if (!file) {
+        return 1;
+    }
 
-    // To split the file args into components
-    std::istringstream ss(fileargs);
-
-    std::string filename;
-    ss >> std::quoted(filename);
     int importval = 0, targetval = 0;
     if (!(ss >> importval) || importval < 1 || importval > 8) {
         importval = 0;  // If extraction fails or value is out of range, set to 0
@@ -171,44 +344,17 @@ int main(int argc, char* argv[]) {
         importval = 0;
     }
 
-    std::cout << filename << std::endl;
-    if (importval != 0) {
-        std::cout << "Import value: " << importval << std::endl;
-        std::cout << "Target value: " << targetval << std::endl;
-    }
-
-    file.open(filename, std::ios::binary);
-    if (!file) {
-        std::cerr << "Couldn't find file :(" << std::endl;
-        system("pause");
-        return 1;
-    }
-
-    uint32_t animSize;
-    file.seekg(0x4, std::ios::beg);
-    file.read(reinterpret_cast<char*>(&animSize), sizeof(animSize));
-    std::cout << "Anim length: " << animSize << std::endl;
-
-    uint16_t frameCount;
-    file.seekg(0xC, std::ios::beg);
-    file.read(reinterpret_cast<char*>(&frameCount), sizeof(frameCount));
-    frameCount += 1;
-    std::cout << "Frame count: " << frameCount << std::endl;
-
-    int calculatedOffset = 1696 + animSize + frameCount;  // 1696 + 1000 + 50 = 2746
-    int remainder = calculatedOffset % 4;     // 2746 % 4 = 2
-    int bgmSizeOffset = (remainder == 0) ? calculatedOffset : calculatedOffset + (4 - remainder);  // 2746 + (4 - 2) = 2748
+    int bgmSizeOffset = calculateBgmSizeOffset(file);
 
     std::cout << std::format("BGM offset at: {} ({:#x})\n", bgmSizeOffset, bgmSizeOffset);
 
     uint32_t bgmLength;
-    file.seekg(bgmSizeOffset, std::ios::beg);
-    file.read(reinterpret_cast<char*>(&bgmLength), sizeof(bgmLength));
+    file->seekg(bgmSizeOffset, std::ios::beg);
+    file->read(reinterpret_cast<char*>(&bgmLength), sizeof(bgmLength));
     std::cout << std::format("BGM length is: {}\n", bgmLength);
 
-    file.seekg(0, std::ios::beg); // necessary to go to 0 to read file from 0 to end
-    std::vector<char> fileData((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
-
+    file->seekg(0, std::ios::beg); // necessary to go to 0 to read file from 0 to end
+    std::vector<char> fileData((std::istreambuf_iterator<char>(*file)), std::istreambuf_iterator<char>());
 
     *reinterpret_cast<uint32_t*>(&fileData[bgmSizeOffset]) = bgm.size(); // updates bgm size data
 
@@ -217,6 +363,25 @@ int main(int argc, char* argv[]) {
         *reinterpret_cast<uint8_t*>(&fileData[bgmSizeOffset + 17]) = 8 - importval;
         std::cout << std::format("Updated import/target speed flags\n");
     }
+    else {
+        targetval = 8 - static_cast<int8_t>(fileData[bgmSizeOffset + 16]);
+        importval = 8 - static_cast<int8_t>(fileData[bgmSizeOffset + 17]);
+    }
+    std::cout << "Import value: " << importval << std::endl;
+    std::cout << "Target value: " << targetval << std::endl;
+
+    double fpsImport = getFpsFromSpeed(importval);
+    double fpsTarget = getFpsFromSpeed(targetval);
+    double multip = fpsImport / fpsTarget;
+    double newseconds = seconds * multip;
+    double framecalc = newseconds * fpsTarget;
+    multip = std::round(multip * 1000.0) / 1000.0;
+    newseconds = std::round(newseconds * 1000.0) / 1000.0;
+    framecalc = std::round(framecalc * 1000.0) / 1000.0;
+    if (importval != targetval) {
+        std::cout << std::format("Speed {}->{} ({}FPS to {}FPS) multiplier: {}\n", importval, targetval, fpsImport, fpsTarget, multip);
+    }
+    std::cout << std::format("New song duration is {}s and this covers {} frames of speed {}! ({} frames in flip)\n", newseconds, framecalc, targetval, frameCount);
 
     int dataSizeStart = bgmSizeOffset + 32; // Start of the chunk to drop
     int dataSizeEnd = dataSizeStart + bgmLength; // End of the chunk to drop
@@ -231,7 +396,6 @@ int main(int argc, char* argv[]) {
     // Concatenate firstpart with newdata (music), then secondpart (everything after music except sig, so just sfx if any)
     firstPart.insert(firstPart.end(), newData.begin(), newData.end());
     firstPart.insert(firstPart.end(), secondPart.begin(), secondPart.end() - 0x90);
-
 
     std::string newFileName = NameGen(file);
     std::string filePathOutput = newFileName + ".ppm";
@@ -260,7 +424,6 @@ int main(int argc, char* argv[]) {
     outyFile.write(firstPart.data(), firstPart.size());
     remove("sha1.sign");
     
-    file.close();
     outyFile.close();
 
     std::cout << "File successfully updated: " << newFileName << ".ppm" << std::endl;
