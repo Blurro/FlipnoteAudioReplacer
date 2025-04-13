@@ -12,10 +12,11 @@ I'm just a huge noob who got really dead set on getting HQ audio into my flipnot
 
 ## Usage
 
-Just drag and drop your <1min .wav file (mp4 works too) onto the tool, and enter your flipnote file when asked!
+*Encoding+importing* Just drag and drop your .wav file (under 1 min, mp4 works too) onto the tool, and enter your flipnote file when asked!
 
-Requires ffmpeg to be installed and added to your system path! (remind me to do something about that)
+*Decoding/extracting* Just double click the tool with no arguments, and enter your flipnote file or encoded audio when asked!
 
 Enter your flipnote.ppm file name when prompted (.ppm inclduded), the tool will automatically rename the output flipnote to a name your DS will accept.
+*(apparently the first letter uses some odd math including your mac or id ?? I don't believe its been completely figured out yet, just save it again if you want it accurate)*
 
 Full guide with useful info around animation speeds, and how it can help you **double the quality of your song** [found here on GBATemp](https://gbatemp.net/threads/flipnote-nds-ppm-file-direct-audio-import-tool.669125/)
