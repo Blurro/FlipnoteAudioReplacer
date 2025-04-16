@@ -172,6 +172,17 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Hello!!" << std::endl;
 
+    // if we detect regular cmd instead of terminal skip the logo stuff
+    bool isCmd = false;
+    HWND consoleWindow = GetConsoleWindow();
+    if (consoleWindow != NULL) {
+        char className[256];
+        GetClassNameA(consoleWindow, className, sizeof(className));
+        if (std::string(className).find("ConsoleWindowClass") != std::string::npos) {
+            isCmd = true;
+        }
+    }
+
     std::string exeDirectory = getExeDirectory();
     if (exeDirectory.empty()) {
         std::cerr << "Failed to determine the executable directory." << std::endl;
@@ -182,7 +193,9 @@ int main(int argc, char* argv[]) {
         std::string promppy = "OR enter a flip.ppm/.adpcm to extract a .wav from: ";
         std::cout << "Usage for import: Drag and drop a .wav file onto the tool, or provide its path as an argument\n\n" << promppy;
 
-        FireLogoPrint(56, 5, promppy.length()+1, 4);
+        if (!isCmd) {
+            FireLogoPrint(56, 5, promppy.length() + 1, 4);
+        }
 
         std::unique_ptr<std::istream> inputFile = openFileFromInput();
         if (!inputFile) { return 1; }
@@ -327,7 +340,9 @@ int main(int argc, char* argv[]) {
     std::cout << "\n\nEnter flipnote.ppm to insert music to below\nOptional: Add 'import speed' and 'target speed' values! Example:\n'flip.ppm 5 6' (the song speed AND Hz quality will be doubled to suit the 6->12 fps jump)\nMake sure to adjust the song speed manually in Audacity for this. Adjustment guide: https://gbatemp.net/threads/flipnote-nds-ppm-file-direct-audio-import-tool.669125/\n\nYour input: ";
 
     // FIRE LOGO PRINT
-    FireLogoPrint(70, 2, 13, 999);
+    if (!isCmd) {
+        FireLogoPrint(70, 2, 13, 999);
+    }
     //end of fire logo print
 
     std::unique_ptr<std::istream> file = openFileFromInput();
