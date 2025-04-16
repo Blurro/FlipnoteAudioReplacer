@@ -1,4 +1,3 @@
-// implementation is from libavcodec
 #pragma once
 #include <cstdint>
 #include <cmath>
