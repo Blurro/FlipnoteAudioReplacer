@@ -49,14 +49,6 @@ std::string NameGen(std::unique_ptr<std::istream>& file) {
     return std::format("{}{}_{}_{}", randomLetter, str1, str2, str3);
 }
 
-static bool isNumber(const std::string& str) {
-    // Helper function to check if a string is a valid integer
-    for (char c : str) {
-        if (!isdigit(c)) return false;
-    }
-    return true;
-}
-
 uint16_t frameCount;
 int calculateBgmSizeOffset(std::unique_ptr<std::istream>& file) {
     uint32_t animSize;
@@ -288,10 +280,10 @@ int main(int argc, char* argv[]) {
     std::cout << filePath << std::endl;
 
     if (ffmpegFound == 1) {
-        system(std::format("{} -i \"{}\" -ac 1 -y -ar 8192 audio.wav", ffmpegPath, filePath).c_str());
+        system(std::format("cmd /C \"\"{}\" -i \"{}\" -ac 1 -y -ar 8192 audio.wav\"", ffmpegPath, filePath).c_str());
     }
     else if (ffmpegFound == 2) {
-        system(std::format("ffmpeg -i \"{}\" -ac 1 -y -ar 8192 audio.wav", filePath).c_str());
+        system(std::format("cmd /C \"ffmpeg -i \"{}\" -ac 1 -y -ar 8192 audio.wav\"", filePath).c_str());
     }
     else {
         return 1;
