@@ -347,11 +347,6 @@ int main(int argc, char* argv[]) {
 
     if (!sample_data) throw "Could not parse audio.wav!";
     if (channels != 1) throw "WAV file needs to be mono!";
-    if (pcm_frame_count > 491520) {
-        std::cout << "BGM is longer than 1 minute!" << std::endl;
-        system("pause");
-        return 1;
-    }
 
     AdpcmState initialState = EncodeInitialState(sample_data[0]);
     if (initialState.stepIndex > 26) {
@@ -368,6 +363,11 @@ int main(int argc, char* argv[]) {
         drwav_free(sample_data); // free old buffer from dr_wav
         sample_data = padded;
         pcm_frame_count += 1;
+    }
+    if (pcm_frame_count > 491520) {
+        std::cout << "BGM is longer than 1 minute!" << std::endl;
+        system("pause");
+        return 1;
     }
     std::cout << "Best initial step index: " << static_cast<int>(initialState.stepIndex) << std::endl;
 
