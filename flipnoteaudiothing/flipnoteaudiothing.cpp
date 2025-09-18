@@ -1,3 +1,4 @@
+#define _CRT_SECURE_NO_WARNINGS
 #include <array>
 #include <algorithm>
 #include <cstdio>
@@ -15,8 +16,49 @@
 #include <cstdlib>
 #include <string>
 #include <windows.h>
+#include <openssl/rsa.h>
+#include <openssl/pem.h>
+#include <openssl/sha.h>
+#include <openssl/applink.c>
 #define DR_WAV_IMPLEMENTATION
 #include "../include/dr_wav.h"
+
+bool sign_file(const std::string& privkey_file, const std::string& input_file, const std::string& output_sig) {
+    FILE* fp = nullptr;
+    if (fopen_s(&fp, privkey_file.c_str(), "r") != 0 || !fp) return false;
+
+    EVP_PKEY* pkey = PEM_read_PrivateKey(fp, nullptr, nullptr, nullptr);
+    fclose(fp);
+    if (!pkey) return false;
+
+    std::ifstream in(input_file, std::ios::binary);
+    std::vector<unsigned char> buf((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    in.close();
+
+    EVP_MD_CTX* ctx = EVP_MD_CTX_new();
+    if (!ctx) {
+        EVP_PKEY_free(pkey);
+        return false;
+    }
+
+    unsigned char sig[256];
+    size_t sig_len = sizeof(sig);
+
+    bool success = false;
+    if (EVP_SignInit(ctx, EVP_sha1()) &&
+        EVP_SignUpdate(ctx, buf.data(), buf.size()) &&   // pass raw data, not hash
+        EVP_SignFinal(ctx, sig, (unsigned int*)&sig_len, pkey)) {
+        std::ofstream out(output_sig, std::ios::binary);
+        out.write((char*)sig, sig_len);
+        out.close();
+        success = true;
+    }
+
+    EVP_MD_CTX_free(ctx);
+    EVP_PKEY_free(pkey);
+
+    return success;
+}
 
 std::string NameGen(std::unique_ptr<std::istream>& file) {
     char str1e[3];
@@ -279,6 +321,13 @@ int main(int argc, char* argv[]) {
     //std::string filePath = "ogextract.wav";
     std::cout << filePath << std::endl;
 
+    std::string ext = filePath.substr(filePath.find_last_of('.'));
+    if (ext == ".ppm" || ext == ".adpcm") {
+        std::cout << "You're supposed to drag an audio file on here for importing! To extract audio instead, double click the tool and enter when prompted\n";
+        system("pause");
+        return 1;
+    }
+
     if (ffmpegFound == 1) {
         system(std::format("cmd /C \"\"{}\" -i \"{}\" -ac 1 -y -ar 8192 audio.wav\"", ffmpegPath, filePath).c_str());
     }
@@ -305,6 +354,21 @@ int main(int argc, char* argv[]) {
     }
 
     AdpcmState initialState = EncodeInitialState(sample_data[0]);
+    if (initialState.stepIndex > 26) {
+        std::cout << "Initial step was too high ("
+            << static_cast<int>(initialState.stepIndex)
+            << "), resetting to 0 with pad sample." << std::endl;
+        initialState.stepIndex = 0;
+
+        // add one zero sample at the beginning
+        int16_t* padded = new int16_t[pcm_frame_count + 1];
+        padded[0] = 0;
+        std::memcpy(padded + 1, sample_data, pcm_frame_count * sizeof(int16_t));
+
+        drwav_free(sample_data); // free old buffer from dr_wav
+        sample_data = padded;
+        pcm_frame_count += 1;
+    }
     std::cout << "Best initial step index: " << static_cast<int>(initialState.stepIndex) << std::endl;
 
     AdpcmEncoder encoder;
@@ -345,7 +409,8 @@ int main(int argc, char* argv[]) {
     int importval = 0, targetval = 0;
     if (!(ss >> importval) || importval < 1 || importval > 8) {
         importval = 0;  // If extraction fails or value is out of range, set to 0
-    } else if (!(ss >> targetval) || targetval < 1 || targetval > 8) {
+    }
+    else if (!(ss >> targetval) || targetval < 1 || targetval > 8) {
         targetval = 0;
         importval = 0;
     }
@@ -420,8 +485,11 @@ int main(int argc, char* argv[]) {
     system("curl -s https://web.archive.org/web/20240819133647/https://www.lampwrights.com/showthread.php?t=28 | awk '/MIICX/{flag=1} flag; /dT7M/{exit}' >> temp.e");
     system("echo -----END RSA PRIVATE KEY----- >> temp.e");
 
-    std::string command = "openssl dgst -sha1 -sign temp.e -out sha1.sign " + filePathOutput;
-    system(command.c_str());
+    if (!sign_file("temp.e", filePathOutput, "sha1.sign")) {
+        std::cerr << "signing failed, manually use the key in temp.e to generate a sig over the current output ppm, append the result sig to the end of the ppm, followed by 16 null bytes. your ppm should now be 144 bytes bigger (skipping this will cause flipnote to delete it)\n";
+        system("pause");
+        return 1;
+    }
     remove("temp.e");
 
     std::ifstream sigFile("sha1.sign", std::ios::binary);
@@ -434,7 +502,7 @@ int main(int argc, char* argv[]) {
     outyFile.open(filePathOutput, std::ios::binary | std::ios::trunc); // close n reopen so writing again doesnt append. Opening wipes file.
     outyFile.write(firstPart.data(), firstPart.size());
     remove("sha1.sign");
-    
+
     outyFile.close();
 
     std::cout << "File successfully updated: " << newFileName << ".ppm" << std::endl;
