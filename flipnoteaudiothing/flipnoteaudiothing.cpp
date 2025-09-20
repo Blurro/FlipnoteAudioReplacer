@@ -352,17 +352,8 @@ int main(int argc, char* argv[]) {
     if (initialState.stepIndex > 26) {
         std::cout << "Initial step was too high ("
             << static_cast<int>(initialState.stepIndex)
-            << "), resetting to 0 with pad sample." << std::endl;
+            << "), defaulting to 0." << std::endl;
         initialState.stepIndex = 0;
-
-        // add one zero sample at the beginning
-        int16_t* padded = new int16_t[pcm_frame_count + 1];
-        padded[0] = 0;
-        std::memcpy(padded + 1, sample_data, pcm_frame_count * sizeof(int16_t));
-
-        drwav_free(sample_data); // free old buffer from dr_wav
-        sample_data = padded;
-        pcm_frame_count += 1;
     }
     if (pcm_frame_count > 491520) {
         std::cout << "BGM is longer than 1 minute!" << std::endl;
